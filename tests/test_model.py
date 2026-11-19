@@ -188,6 +188,10 @@ def test_append_positions_and_hf_rewrites_match_fresh_sequence_oracle():
     rewrite = model(replacement,past_key_values=hf,cache_position=torch.tensor([2,3])).logits
     fresh = model(torch.cat([original[:,:2],replacement],dim=1),use_cache=False).logits[:, -2:]
     torch.testing.assert_close(rewrite,fresh,atol=2e-6,rtol=2e-5)
+    assert hf.get_seq_length() == 4
+    appended = model(torch.tensor([[13]]), past_key_values=hf).logits
+    fresh_append = model(torch.tensor([[3,5,11,12,13]]), use_cache=False).logits[:, -1:]
+    torch.testing.assert_close(appended, fresh_append, atol=2e-6, rtol=2e-5)
 
 
 @pytest.mark.parametrize('selector', ['permutation','tail','full-count'])

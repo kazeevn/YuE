@@ -104,6 +104,11 @@ The staged Python API exposes `plan()` → `generate_semantic()` → `synthesize
 
 ## Quick start
 
+This fork also supports Python 3.14 and the Zeus system-CUDA torch wheels.
+Its standard inference path is tested with Transformers 4.57.6 and 5.19.
+The optional `fast` and `xpu` extras retain upstream's separate backend pins
+and are not part of the Zeus wheelhouse profile.
+
 **Linux · Python 3.12 · NVIDIA GPU with BF16 support and 24 GB VRAM.** YuE2 produces 48 kHz stereo audio without quantization. Model files download from Hugging Face on first use.
 
 For experimental low-memory, Windows, AMD, Apple Silicon and Intel paths, see [hardware setup and validation scope](docs/hardware.md).

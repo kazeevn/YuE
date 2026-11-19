@@ -50,7 +50,7 @@ def qwen_config(config):
                   max_position_embeddings=config.get("max_position_embeddings", CONTEXT),
                   tie_word_embeddings=False, attention_bias=False, attention_dropout=0.,
                   use_sliding_window=False, sliding_window=None, max_window_layers=0,
-                  torch_dtype="bfloat16")
+                  torch_dtype=config.get("dtype", config.get("torch_dtype", "bfloat16")))
     return output
 
 

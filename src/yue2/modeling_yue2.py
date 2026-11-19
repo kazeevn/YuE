@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import GenerationMixin, PretrainedConfig, PreTrainedModel
-from transformers.cache_utils import DynamicCache
+from transformers.cache_utils import DynamicCache, StaticCache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 
@@ -227,7 +227,31 @@ class Attention(nn.Module):
             # The append-only cache tracks used lengths on the host. No scalar
             # device read is needed here, including on CUDA and XPU.
             used = past_key_value.get_seq_length() + T if isinstance(past_key_value, StaticKVCache) else None
-            k, v = past_key_value.update(k, v, layer_idx, cache_kwargs)
+            if (isinstance(past_key_value, StaticCache)
+                    and hasattr(past_key_value.layers[layer_idx], "cumulative_length")):
+                # Transformers 5 static layers ignore cache_position. Preserve
+                # explicit slot rewrites and the high-water mark used by decode.
+                cache = past_key_value
+                if cache.offloading:
+                    torch.cuda.default_stream(k.device).wait_stream(cache.prefetch_stream)
+                    cache.prefetch(layer_idx + 1, cache.only_non_sliding)
+                layer = cache.layers[layer_idx]
+                if not layer.is_initialized:
+                    layer.lazy_initialization(k, v)
+                try:
+                    layer.keys.index_copy_(2, cache_position, k)
+                    layer.values.index_copy_(2, cache_position, v)
+                except NotImplementedError:
+                    layer.keys[:, :, cache_position] = k
+                    layer.values[:, :, cache_position] = v
+                layer.cumulative_length.copy_(torch.maximum(
+                    layer.cumulative_length, cache_position.max() + 1
+                ))
+                k, v = layer.keys, layer.values
+                if cache.offloading:
+                    cache.offload(layer_idx, cache.only_non_sliding)
+            else:
+                k, v = past_key_value.update(k, v, layer_idx, cache_kwargs)
             if used is not None and k.shape[2] > used and attention_mask is None:
                 attention_mask = torch.arange(k.shape[2], device=x.device)[None, None, None, :] < used
 
@@ -507,7 +531,7 @@ class YuE2PreTrainedModel(PreTrainedModel):
 class YuE2ForCausalLM(YuE2PreTrainedModel, GenerationMixin):
     """YuE2 model: AR causal LM (generate) + NAR flow matching (ODE)."""
 
-    _tied_weights_keys = ["lm_head.weight"]
+    _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
 
     def __init__(self, config: YuE2Config):
         super().__init__(config)

@@ -33,6 +33,7 @@ def make_checkpoint(path):
 def test_optional_imports_do_not_load_cuda_extensions():
     code = """
 import sys, importlib.abc
+import torch  # Newer torch probes Triton availability during its own import.
 class Deny(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname.split('.')[0] in {'vllm', 'triton'}:
